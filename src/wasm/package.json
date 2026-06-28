@@ -1,0 +1,25 @@
+{
+  "name": "wickra-backtest-wasm",
+  "type": "module",
+  "collaborators": [
+    "kingchenc"
+  ],
+  "description": "WebAssembly bindings for the wickra-backtest streaming backtester — backtest in the browser.",
+  "version": "0.1.0",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wickra-lib/wickra-backtest"
+  },
+  "files": [
+    "wickra_backtest_wasm_bg.wasm",
+    "wickra_backtest_wasm.js",
+    "wickra_backtest_wasm.d.ts"
+  ],
+  "main": "wickra_backtest_wasm.js",
+  "homepage": "https://wickra.org",
+  "types": "wickra_backtest_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
