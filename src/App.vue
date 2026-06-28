@@ -1,50 +1,41 @@
 <script setup lang="ts">
 import { ref, shallowRef, onMounted, nextTick } from 'vue'
-import { createChart, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts'
+import {
+  createChart, CrosshairMode,
+  type IChartApi, type ISeriesApi, type UTCTimestamp,
+} from 'lightweight-charts'
 import { ensureWasm, run_json, version } from './lib/wasm'
+import { PRESETS } from './lib/presets'
+import { makeCandles, REGIMES, type Regime, type Candle } from './lib/data'
 
-const DEFAULT_SPEC = `{
-  "symbol": "DEMO", "timeframe": "1h",
-  "indicators": {
-    "fast": { "type": "Ema", "params": [9] },
-    "slow": { "type": "Ema", "params": [21] }
-  },
-  "entry": { "cross_above": ["fast", "slow"] },
-  "exit":  { "cross_below": ["fast", "slow"] },
-  "sizing": { "type": "fixed_fraction", "fraction": 0.95 },
-  "risk":   { "trailing_stop_pct": 6.0 }
-}`
-
-const specText = ref(DEFAULT_SPEC)
+const specText = ref(PRESETS[0].spec)
+const activePreset = ref(PRESETS[0].id)
+const regime = ref<Regime>('bull-then-bear')
 const capital = ref(10000)
 const running = ref(false)
 const error = ref('')
 const ver = ref('')
 const report = shallowRef<any>(null)
+let candles: Candle[] = []
 
-const chartEl = ref<HTMLElement | null>(null)
-let chart: IChartApi | null = null
+const priceEl = ref<HTMLElement | null>(null)
+const equityEl = ref<HTMLElement | null>(null)
+let priceChart: IChartApi | null = null
+let equityChart: IChartApi | null = null
+let candleSeries: ISeriesApi<'Candlestick'> | null = null
 let equitySeries: ISeriesApi<'Area'> | null = null
+let ddSeries: ISeriesApi<'Area'> | null = null
 
-// A deterministic 240-bar OHLCV series (trend up, then chop, then trend down)
-// on an hourly grid, so the demo always trades and the chart reads as dates.
-function sampleCandles() {
-  const base = Math.floor(Date.UTC(2024, 0, 1) / 1000)
-  const candles = []
-  let p = 100
-  for (let i = 0; i < 240; i++) {
-    const drift = i < 90 ? 0.55 : i < 150 ? 0 : -0.5
-    const wave = Math.sin(i * 0.18) * 2.4 + Math.sin(i * 0.06) * 4
-    const open = p
-    p = Math.max(5, p + drift + (wave - (Math.sin((i - 1) * 0.18) * 2.4 + Math.sin((i - 1) * 0.06) * 4)) * 0.6)
-    const close = p
-    candles.push({
-      time: base + i * 3600,
-      open, high: Math.max(open, close) + 0.8, low: Math.min(open, close) - 0.8,
-      close, volume: 1000 + (i % 7) * 50,
-    })
-  }
-  return candles
+function loadPreset(id: string) {
+  const p = PRESETS.find((x) => x.id === id)!
+  activePreset.value = id
+  specText.value = p.spec
+  runBacktest()
+}
+
+function loadAndScroll(id: string) {
+  loadPreset(id)
+  document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })
 }
 
 async function runBacktest() {
@@ -55,11 +46,11 @@ async function runBacktest() {
     ver.value = version()
     let spec: unknown
     try { spec = JSON.parse(specText.value) } catch (e) { throw new Error('Spec is not valid JSON: ' + (e as Error).message) }
-    const request = JSON.stringify({ capital: capital.value, spec, candles: sampleCandles() })
-    const out = run_json(request)
+    candles = makeCandles(regime.value)
+    const out = run_json(JSON.stringify({ capital: capital.value, spec, candles }))
     report.value = JSON.parse(out)
     await nextTick()
-    drawEquity()
+    draw()
   } catch (e) {
     report.value = null
     error.value = (e as Error).message || String(e)
@@ -68,28 +59,54 @@ async function runBacktest() {
   }
 }
 
-function drawEquity() {
-  if (!chartEl.value || !report.value) return
-  if (!chart) {
-    chart = createChart(chartEl.value, {
-      height: 300,
-      layout: { background: { color: 'transparent' }, textColor: '#9aa6b4' },
-      grid: { vertLines: { color: '#1a2230' }, horzLines: { color: '#1a2230' } },
-      rightPriceScale: { borderColor: '#222a36' },
-      timeScale: { borderColor: '#222a36' },
+function ensureCharts() {
+  const common = {
+    layout: { background: { color: 'transparent' }, textColor: '#9aa6b4', fontSize: 11 },
+    grid: { vertLines: { color: '#161d29' }, horzLines: { color: '#161d29' } },
+    rightPriceScale: { borderColor: '#222a36' },
+    timeScale: { borderColor: '#222a36', timeVisible: true },
+    crosshair: { mode: CrosshairMode.Normal },
+  } as const
+  if (!priceChart && priceEl.value) {
+    priceChart = createChart(priceEl.value, { height: 300, ...common })
+    candleSeries = priceChart.addCandlestickSeries({
+      upColor: '#4ade80', downColor: '#f87171', borderVisible: false, wickUpColor: '#4ade80', wickDownColor: '#f87171',
     })
-    equitySeries = chart.addAreaSeries({
-      lineColor: '#f8cf63', topColor: 'rgba(248,207,99,0.28)', bottomColor: 'rgba(248,207,99,0.0)', lineWidth: 2,
-    })
-    new ResizeObserver(() => chart && chartEl.value && chart.applyOptions({ width: chartEl.value.clientWidth })).observe(chartEl.value)
+    new ResizeObserver(() => priceChart && priceEl.value && priceChart.applyOptions({ width: priceEl.value.clientWidth })).observe(priceEl.value)
   }
-  equitySeries!.setData(report.value.equity.map((e: any) => ({ time: e.time as UTCTimestamp, value: e.equity })))
-  chart.timeScale().fitContent()
-  chart.applyOptions({ width: chartEl.value.clientWidth })
+  if (!equityChart && equityEl.value) {
+    equityChart = createChart(equityEl.value, { height: 210, ...common })
+    equitySeries = equityChart.addAreaSeries({ lineColor: '#f8cf63', topColor: 'rgba(248,207,99,0.26)', bottomColor: 'rgba(248,207,99,0)', lineWidth: 2, priceScaleId: 'right' })
+    ddSeries = equityChart.addAreaSeries({ lineColor: 'rgba(248,113,113,0.9)', topColor: 'rgba(248,113,113,0)', bottomColor: 'rgba(248,113,113,0.30)', lineWidth: 1, priceScaleId: 'dd' })
+    equityChart.priceScale('dd').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 }, visible: false })
+    new ResizeObserver(() => equityChart && equityEl.value && equityChart.applyOptions({ width: equityEl.value.clientWidth })).observe(equityEl.value)
+  }
+}
+
+function draw() {
+  ensureCharts()
+  if (!report.value) return
+  candleSeries!.setData(candles.map((c) => ({ time: c.time as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close })))
+  const markers = report.value.trades.flatMap((t: any) => ([
+    { time: t.entry_time as UTCTimestamp, position: 'belowBar', color: '#4ade80', shape: 'arrowUp', text: t.qty < 0 ? 'short' : 'long' },
+    { time: t.exit_time as UTCTimestamp, position: 'aboveBar', color: '#f87171', shape: 'arrowDown', text: 'exit' },
+  ]))
+  markers.sort((a: any, b: any) => a.time - b.time)
+  candleSeries!.setMarkers(markers)
+  priceChart!.timeScale().fitContent()
+  priceChart!.applyOptions({ width: priceEl.value!.clientWidth })
+
+  let peak = -Infinity
+  const eq = report.value.equity.map((e: any) => ({ time: e.time as UTCTimestamp, value: e.equity }))
+  const dd = report.value.equity.map((e: any) => { peak = Math.max(peak, e.equity); return { time: e.time as UTCTimestamp, value: e.equity - peak } })
+  equitySeries!.setData(eq)
+  ddSeries!.setData(dd)
+  equityChart!.timeScale().fitContent()
+  equityChart!.applyOptions({ width: equityEl.value!.clientWidth })
 }
 
 const pct = (x: number) => (x >= 0 ? '+' : '') + x.toFixed(2) + '%'
-const money = (x: number) => (x >= 0 ? '+' : '') + '$' + x.toFixed(2)
+const money = (x: number) => (x >= 0 ? '+$' : '-$') + Math.abs(x).toFixed(2)
 const num = (x: number) => x.toFixed(2)
 
 onMounted(runBacktest)
@@ -97,19 +114,24 @@ onMounted(runBacktest)
 
 <template>
   <div class="wrap">
+    <!-- HERO -->
     <header class="hero">
       <div class="brand">
         <svg class="logo" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#11161f" stroke="#2a3342"/><rect x="44" y="20" width="12" height="60" rx="6" fill="#f8cf63"/><rect x="38" y="36" width="24" height="28" rx="6" fill="#f8cf63"/></svg>
         <h1>wickra <b>backtest</b></h1>
+        <nav class="topnav">
+          <a href="#demo">Demo</a><a href="#spec">Spec</a><a href="#install">Install</a><a href="#cookbook">Cookbook</a>
+          <a href="https://github.com/wickra-lib/wickra-backtest">GitHub ↗</a>
+        </nav>
       </div>
       <p class="tag">Backtest a strategy in your browser — backtest ≡ live, byte-identical in 10 languages.</p>
       <p class="sub">
         A streaming-native, event-driven backtester built on the Wickra indicator core. A strategy is
         <b>data</b> — a JSON spec, not code — so a backtest and a live run over the same spec produce identical
-        signals. The whole engine below runs <b>100% in your browser</b> via WebAssembly: zero backend, no upload.
+        signals. The whole engine below runs <b>100% in your browser</b> via WebAssembly: zero backend, nothing uploaded.
       </p>
       <div class="pills">
-        <span class="pill"><b>O(1)</b> per bar</span>
+        <span class="pill"><b>O(1)</b> per bar · ~1.7M bars/s</span>
         <span class="pill"><b>495</b> indicators</span>
         <span class="pill"><b>10</b> languages</span>
         <span class="pill">order book · trades · funding</span>
@@ -118,31 +140,41 @@ onMounted(runBacktest)
       </div>
     </header>
 
-    <h2>Live demo</h2>
+    <!-- DEMO -->
+    <h2 id="demo">Live demo</h2>
     <p class="section-sub">
-      Edit the strategy spec, hit Run — it backtests over a built-in 240-bar sample series, entirely client-side
-      (powered by <code>wickra-backtest-wasm</code>). The exact same engine, fed live bars, becomes the live bot.
+      Pick a strategy, choose a market regime, hit Run — it backtests over a deterministic sample series entirely
+      client-side via <code>wickra-backtest-wasm</code>. The same engine, fed live bars, becomes the live bot.
     </p>
+
+    <div class="presetbar">
+      <button v-for="p in PRESETS" :key="p.id" class="preset" :class="{ on: activePreset === p.id }" @click="loadPreset(p.id)">{{ p.name }}</button>
+    </div>
+    <p class="muted preset-desc">{{ PRESETS.find(p => p.id === activePreset)?.desc }}</p>
 
     <div class="grid2">
       <div class="panel">
         <div class="demo-head">
           <span class="ttl">Strategy spec <span class="muted">(JSON)</span></span>
-          <span class="muted">capital&nbsp;
-            <input v-model.number="capital" type="number" min="100" step="100"
-                   style="width:90px;background:#0c111a;border:1px solid var(--line);color:#d7e0ea;border-radius:6px;padding:4px 6px"/>
+          <span class="muted">
+            regime
+            <select v-model="regime" @change="runBacktest" class="sel">
+              <option v-for="r in REGIMES" :key="r.id" :value="r.id">{{ r.label }}</option>
+            </select>
+            &nbsp;capital
+            <input v-model.number="capital" type="number" min="100" step="100" class="cap"/>
           </span>
         </div>
         <textarea class="spec" v-model="specText" spellcheck="false"></textarea>
         <div class="run-row">
           <button class="run" :disabled="running" @click="runBacktest">{{ running ? 'Running…' : 'Run backtest' }}</button>
-          <span v-if="ver" class="muted">engine wasm v{{ ver }}</span>
+          <span v-if="ver" class="muted">engine wasm v{{ ver }} · runs in-browser</span>
         </div>
         <p v-if="error" class="err">⚠ {{ error }}</p>
       </div>
 
       <div class="panel">
-        <div class="ttl" style="font-weight:600;margin-bottom:10px">Result</div>
+        <div class="ttl" style="font-weight:600;margin-bottom:10px">Report</div>
         <div v-if="report" class="metrics">
           <div class="metric"><div class="k">Return</div><div class="v" :class="report.metrics.return_pct>=0?'pos':'neg'">{{ pct(report.metrics.return_pct) }}</div></div>
           <div class="metric"><div class="k">PnL</div><div class="v" :class="report.metrics.pnl>=0?'pos':'neg'">{{ money(report.metrics.pnl) }}</div></div>
@@ -152,35 +184,43 @@ onMounted(runBacktest)
           <div class="metric"><div class="k">Calmar</div><div class="v">{{ num(report.metrics.calmar) }}</div></div>
           <div class="metric"><div class="k">Max drawdown</div><div class="v neg">{{ num(report.metrics.max_drawdown) }}%</div></div>
           <div class="metric"><div class="k">Win rate</div><div class="v">{{ num(report.metrics.win_rate*100) }}%</div></div>
-          <div class="metric"><div class="k">Fees paid</div><div class="v">${{ num(report.fees_paid) }}</div></div>
+          <div class="metric"><div class="k">Profit factor</div><div class="v">{{ num(report.metrics.profit_factor) }}</div></div>
         </div>
         <div v-else class="muted">Run the backtest to see the report.</div>
       </div>
     </div>
 
     <div class="panel" style="margin-top:18px">
-      <div class="ttl" style="font-weight:600;margin-bottom:10px">Equity curve</div>
-      <div id="chart" ref="chartEl"></div>
+      <div class="ttl" style="font-weight:600;margin-bottom:10px">Price &amp; trades <span class="muted">— entry ▲ / exit ▼</span></div>
+      <div ref="priceEl" class="chart"></div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <div class="ttl" style="font-weight:600;margin-bottom:10px">Equity curve &amp; drawdown</div>
+      <div ref="equityEl" class="chart"></div>
     </div>
 
     <div v-if="report && report.trades.length" class="panel" style="margin-top:18px">
       <div class="ttl" style="font-weight:600;margin-bottom:10px">Trades <span class="muted">({{ report.trades.length }})</span></div>
-      <table class="trades">
-        <thead><tr><th>#</th><th>Entry</th><th>Exit</th><th>Qty</th><th>PnL</th><th>Return</th><th>Reason</th></tr></thead>
-        <tbody>
-          <tr v-for="(t, i) in report.trades" :key="i">
-            <td>{{ i + 1 }}</td>
-            <td>{{ t.entry_price.toFixed(2) }}</td>
-            <td>{{ t.exit_price.toFixed(2) }}</td>
-            <td>{{ t.qty.toFixed(2) }}</td>
-            <td :style="{color: t.pnl>=0 ? 'var(--green)' : 'var(--red)'}">{{ money(t.pnl) }}</td>
-            <td :style="{color: t.return_pct>=0 ? 'var(--green)' : 'var(--red)'}">{{ pct(t.return_pct) }}</td>
-            <td style="text-align:left;color:var(--dim)">{{ t.reason }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="tbl-scroll">
+        <table class="trades">
+          <thead><tr><th>#</th><th>Side</th><th>Entry</th><th>Exit</th><th>Qty</th><th>PnL</th><th>Return</th><th>Reason</th></tr></thead>
+          <tbody>
+            <tr v-for="(t, i) in report.trades" :key="i">
+              <td>{{ i + 1 }}</td>
+              <td style="text-align:left">{{ t.qty < 0 ? 'short' : 'long' }}</td>
+              <td>{{ t.entry_price.toFixed(2) }}</td>
+              <td>{{ t.exit_price.toFixed(2) }}</td>
+              <td>{{ Math.abs(t.qty).toFixed(2) }}</td>
+              <td :style="{color: t.pnl>=0 ? 'var(--green)' : 'var(--red)'}">{{ money(t.pnl) }}</td>
+              <td :style="{color: t.return_pct>=0 ? 'var(--green)' : 'var(--red)'}">{{ pct(t.return_pct) }}</td>
+              <td style="text-align:left;color:var(--dim)">{{ t.reason }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
+    <!-- WHY -->
     <h2>Why it's different</h2>
     <p class="section-sub">Off-the-shelf backtesters recompute indicators over the whole history every tick and reimplement the math per language. Wickra doesn't.</p>
     <div class="cards">
@@ -192,11 +232,44 @@ onMounted(runBacktest)
       <div class="panel card"><h3>Strategy = data</h3><p>A strategy is a JSON spec, validated by a JSON Schema. No code to deploy, no DSL to learn twice — the same spec runs from every language binding.</p></div>
     </div>
 
-    <h2>Docs &amp; getting started</h2>
+    <!-- SPEC -->
+    <h2 id="spec">How a strategy spec works</h2>
+    <p class="section-sub">A spec is one JSON object. Full grammar in the <a href="https://github.com/wickra-lib/wickra-backtest/blob/main/docs/STRATEGY_SPEC.md">spec reference</a>.</p>
     <div class="cards">
-      <div class="panel card"><h3>Strategy spec reference</h3><p>The full DSL — operands, conditions, sizing, costs, slippage, risk, execution and the report shape.<br/><a href="https://github.com/wickra-lib/wickra-backtest/blob/main/docs/STRATEGY_SPEC.md">STRATEGY_SPEC.md →</a></p></div>
-      <div class="panel card"><h3>Cookbook</h3><p>Ready-to-run strategies — RSI mean reversion, MACD trend, Bollinger breakout, Donchian, funding carry, order-book imbalance.<br/><a href="https://github.com/wickra-lib/wickra-backtest/blob/main/docs/COOKBOOK.md">COOKBOOK.md →</a></p></div>
-      <div class="panel card"><h3>Install</h3><p><code>pip install wickra-backtest</code> · <code>npm i wickra-backtest</code> · <code>cargo add wickra-backtest</code> — plus C#, Go, Java, R.<br/><a href="https://github.com/wickra-lib/wickra-backtest">GitHub →</a></p></div>
+      <div class="panel card"><h3>Indicators</h3><p>Name indicators by key: <code>{ "fast": { "type": "Ema", "params": [9] } }</code>. Multi-output indicators address a field as <code>"name.field"</code> — <code>macd.signal</code>, <code>bb.upper</code>, <code>dc.lower</code>. Microstructure indicators add <code>"feed": "orderbook"</code>.</p></div>
+      <div class="panel card"><h3>Operands</h3><p>An operand is an indicator key, a <code>"name.field"</code>, a price (<code>{ "price": "close" }</code> — open/high/low/close) or a number. Conditions compare operands.</p></div>
+      <div class="panel card"><h3>Conditions</h3><p><code>cross_above</code> · <code>cross_below</code> · <code>gt</code> · <code>lt</code> · <code>ge</code> · <code>le</code> · <code>eq</code>, combined with <code>and</code> / <code>or</code> / <code>not</code>. Set <code>entry</code>/<code>exit</code> and optional <code>short_entry</code>/<code>short_exit</code>.</p></div>
+      <div class="panel card"><h3>Sizing</h3><p><code>fixed_fraction</code> · <code>fixed_qty</code> · <code>fixed_cash</code> · <code>risk_per_trade</code> (sizes off the stop) · <code>vol_target</code> (targets a realised-vol level).</p></div>
+      <div class="panel card"><h3>Costs</h3><p><code>taker_bps</code> / <code>maker_bps</code> fees, <code>slippage</code> (<code>fixed_bps</code>, <code>spread</code>, <code>volume_impact</code>), and perpetual <code>funding</code> charged per bar.</p></div>
+      <div class="panel card"><h3>Risk &amp; execution</h3><p><code>stop_loss_pct</code>, <code>take_profit_pct</code>, <code>trailing_stop_pct</code>, position caps — checked intrabar. Execution models order type and latency. The result is the <code>BacktestReport</code> you see above.</p></div>
+    </div>
+
+    <!-- INSTALL -->
+    <h2 id="install">Install in your language</h2>
+    <p class="section-sub">One engine kernel behind every binding — byte-identical reports.</p>
+    <div class="install">
+      <div class="ins"><span class="lang">Rust</span><code>cargo add wickra-backtest</code></div>
+      <div class="ins"><span class="lang">Python</span><code>pip install wickra-backtest</code></div>
+      <div class="ins"><span class="lang">Node.js</span><code>npm i wickra-backtest</code></div>
+      <div class="ins"><span class="lang">WASM</span><code>npm i wickra-backtest-wasm</code></div>
+      <div class="ins"><span class="lang">C#</span><code>dotnet add package Wickra.Backtest</code></div>
+      <div class="ins"><span class="lang">Go</span><code>go get github.com/wickra-lib/wickra-backtest-go</code></div>
+      <div class="ins"><span class="lang">Java</span><code>org.wickra:wickra-backtest&nbsp;(Maven Central)</code></div>
+      <div class="ins"><span class="lang">R</span><code>install.packages("wickrabacktest", repos="https://wickra-lib.r-universe.dev")</code></div>
+      <div class="ins"><span class="lang">C / C++</span><code>C ABI header + library — see bindings/c</code></div>
+    </div>
+    <p class="muted" style="margin-top:10px">Registries populate as <code>wickra-backtest</code> is published; until then build from <a href="https://github.com/wickra-lib/wickra-backtest">source</a>.</p>
+
+    <!-- COOKBOOK -->
+    <h2 id="cookbook">Cookbook</h2>
+    <p class="section-sub">Ready-to-run strategies. The first five load straight into the demo; funding-carry and order-book imbalance need a derivatives / order-book feed.</p>
+    <div class="cards">
+      <div v-for="p in PRESETS" :key="p.id" class="panel card cb">
+        <h3>{{ p.name }}</h3><p>{{ p.desc }}</p>
+        <button class="loadbtn" @click="loadAndScroll(p.id)">Load in demo →</button>
+      </div>
+      <div class="panel card cb"><h3>Funding carry <span class="muted">(perp)</span></h3><p>Hold when perpetual funding is negative — you get paid to hold — and charge funding to the position each bar. Needs a derivatives feed.</p></div>
+      <div class="panel card cb"><h3>Order-book imbalance</h3><p>Trade off top-of-book bid/ask imbalance. Needs an order-book feed replayed alongside the candles.</p></div>
     </div>
 
     <footer>
@@ -204,11 +277,13 @@ onMounted(runBacktest)
         <a href="https://github.com/wickra-lib/wickra-backtest">GitHub</a>
         <a href="https://github.com/wickra-lib/wickra-backtest/blob/main/docs/STRATEGY_SPEC.md">Spec reference</a>
         <a href="https://github.com/wickra-lib/wickra-backtest/blob/main/docs/COOKBOOK.md">Cookbook</a>
+        <a href="https://github.com/wickra-lib/wickra-backtest/blob/main/docs/MICROSTRUCTURE.md">Microstructure</a>
         <a href="https://wickra.org">wickra.org</a>
         <a href="https://live.wickra.org">live indicator demo</a>
       </div>
-      Built on <a href="https://github.com/wickra-lib/wickra">Wickra</a>. Not a trading system — backtest results are not
-      indicative of future performance. Dual-licensed MIT OR Apache-2.0.
+      Built on <a href="https://github.com/wickra-lib/wickra">Wickra</a>. Not a trading system — backtest results are
+      deterministic transforms of the input data, not financial advice and not indicative of future performance.
+      Dual-licensed MIT OR Apache-2.0.
     </footer>
   </div>
 </template>
