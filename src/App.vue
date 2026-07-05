@@ -7,7 +7,9 @@ import {
 import { ensureWasm, run_json, version } from './lib/wasm'
 import { PRESETS } from './lib/presets'
 import { makeCandles, REGIMES, type Regime, type Candle } from './lib/data'
+import badges from './badges.json'
 
+const navOpen = ref(false)
 const specText = ref(PRESETS[0].spec)
 const activePreset = ref(PRESETS[0].id)
 const regime = ref<Regime>('bull-then-bear')
@@ -114,16 +116,33 @@ onMounted(runBacktest)
 
 <template>
   <div class="wrap">
-    <!-- HERO -->
-    <header class="hero">
-      <div class="brand">
-        <svg class="logo" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#11161f" stroke="#2a3342"/><rect x="44" y="20" width="12" height="60" rx="6" fill="#f8cf63"/><rect x="38" y="36" width="24" height="28" rx="6" fill="#f8cf63"/></svg>
-        <h1>wickra <b>backtest</b></h1>
-        <nav class="topnav">
-          <a href="#demo">Demo</a><a href="#spec">Spec</a><a href="#install">Install</a><a href="#cookbook">Cookbook</a>
-          <a href="https://github.com/wickra-lib/wickra-backtest">GitHub ↗</a>
+    <!-- TOP BAR (branded, shared with the Wickra ecosystem) -->
+    <header class="topbar">
+      <div class="nav">
+        <a class="nav-brand" href="https://wickra.org" target="_blank" rel="noreferrer">
+          <img class="nav-logo" src="https://wickra.org/wickra-mark.svg" alt="Wickra" width="24" height="24" />
+          <span class="nav-title">Wickra</span>
+        </a>
+        <button
+          class="nav-burger" :class="{ open: navOpen }"
+          type="button" aria-label="Menu" :aria-expanded="navOpen"
+          @click="navOpen = !navOpen"
+        ><span></span><span></span><span></span></button>
+        <nav class="nav-menu" :class="{ open: navOpen }" @click="navOpen = false">
+          <a href="https://wickra.org" target="_blank" rel="noreferrer">Home</a>
+          <a href="https://backtest.wickra.org" target="_blank" rel="noreferrer">Backtest</a>
+          <a href="https://docs.wickra.org" target="_blank" rel="noreferrer">Docs</a>
+          <a href="https://github.com/wickra-lib/wickra-backtest" target="_blank" rel="noreferrer">GitHub</a>
         </nav>
       </div>
+    </header>
+
+    <!-- HERO -->
+    <header class="hero">
+      <h1>wickra <b>backtest</b></h1>
+      <nav class="topnav">
+        <a href="#demo">Demo</a><a href="#spec">Spec</a><a href="#install">Install</a><a href="#cookbook">Cookbook</a>
+      </nav>
       <p class="tag">Backtest a strategy in your browser — backtest ≡ live, byte-identical in 10 languages.</p>
       <p class="sub">
         A streaming-native, event-driven backtester built on the Wickra indicator core. A strategy is
@@ -272,18 +291,21 @@ onMounted(runBacktest)
       <div class="panel card cb"><h3>Order-book imbalance</h3><p>Trade off top-of-book bid/ask imbalance. Needs an order-book feed replayed alongside the candles.</p></div>
     </div>
 
-    <footer>
-      <div class="links">
-        <a href="https://github.com/wickra-lib/wickra-backtest">GitHub</a>
-        <a href="https://github.com/wickra-lib/wickra-backtest/blob/main/docs/STRATEGY_SPEC.md">Spec reference</a>
-        <a href="https://github.com/wickra-lib/wickra-backtest/blob/main/docs/COOKBOOK.md">Cookbook</a>
-        <a href="https://github.com/wickra-lib/wickra-backtest/blob/main/docs/MICROSTRUCTURE.md">Microstructure</a>
-        <a href="https://wickra.org">wickra.org</a>
-        <a href="https://live.wickra.org">live indicator demo</a>
+    <footer class="wk-footer">
+      <div class="wk-footer-badges">
+        <a v-for="b in badges" :key="b.alt" :href="b.href" target="_blank" rel="noreferrer"
+        ><img :src="b.file" :alt="b.alt" :width="b.width" :height="b.height" loading="eager" decoding="async" /></a>
       </div>
-      Built on <a href="https://github.com/wickra-lib/wickra">Wickra</a>. Not a trading system — backtest results are
-      deterministic transforms of the input data, not financial advice and not indicative of future performance.
-      Dual-licensed MIT OR Apache-2.0.
+      <p class="wk-footer-meta">Released under the MIT OR Apache-2.0 license — not a trading system; backtest results are deterministic transforms of the input data, not financial advice and not indicative of future performance.</p>
+      <p class="wk-footer-meta wk-footer-meta-sub">
+        <span>Copyright © 2026 kingchenc</span>
+        <span class="wk-sep">·</span>
+        <a href="https://wickra.org/about" target="_blank" rel="noreferrer">About</a>
+        <span class="wk-sep">·</span>
+        <a href="https://wickra.org/security" target="_blank" rel="noreferrer">Security</a>
+        <span class="wk-sep">·</span>
+        <a href="https://wickra.org/privacy" target="_blank" rel="noreferrer">Privacy</a>
+      </p>
     </footer>
   </div>
 </template>
