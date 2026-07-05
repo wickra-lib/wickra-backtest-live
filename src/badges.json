@@ -1,0 +1,58 @@
+[
+  {
+    "alt": "CI",
+    "href": "https://github.com/wickra-lib/wickra-backtest/actions/workflows/ci.yml",
+    "file": "https://raw.githubusercontent.com/wickra-lib/.github/main/profile/badges/wickra-backtest/ci.svg",
+    "width": 90,
+    "height": 20
+  },
+  {
+    "alt": "CodeQL",
+    "href": "https://github.com/wickra-lib/wickra-backtest/actions/workflows/codeql.yml",
+    "file": "https://raw.githubusercontent.com/wickra-lib/.github/main/profile/badges/wickra-backtest/codeql.svg",
+    "width": 120,
+    "height": 20
+  },
+  {
+    "alt": "codecov",
+    "href": "https://codecov.io/gh/wickra-lib/wickra-backtest",
+    "file": "https://raw.githubusercontent.com/wickra-lib/.github/main/profile/badges/wickra-backtest/codecov.svg",
+    "width": 137,
+    "height": 20
+  },
+  {
+    "alt": "Docs",
+    "href": "https://docs.wickra.org",
+    "file": "https://raw.githubusercontent.com/wickra-lib/.github/main/profile/badges/wickra-backtest/docs.svg",
+    "width": 171,
+    "height": 20
+  },
+  {
+    "alt": "License: MIT OR Apache-2.0",
+    "href": "https://github.com/wickra-lib/wickra-backtest#license",
+    "file": "https://raw.githubusercontent.com/wickra-lib/.github/main/profile/badges/wickra-backtest/license.svg",
+    "width": 164,
+    "height": 20
+  },
+  {
+    "alt": "OpenSSF Scorecard",
+    "href": "https://scorecard.dev/viewer/?uri=github.com/wickra-lib/wickra-backtest",
+    "file": "https://raw.githubusercontent.com/wickra-lib/.github/main/profile/badges/wickra-backtest/scorecard.svg",
+    "width": 136,
+    "height": 20
+  },
+  {
+    "alt": "Build provenance",
+    "href": "https://github.com/wickra-lib/wickra-backtest/attestations",
+    "file": "https://raw.githubusercontent.com/wickra-lib/.github/main/profile/badges/wickra-backtest/provenance.svg",
+    "width": 147,
+    "height": 20
+  },
+  {
+    "alt": "Verified across 10 languages",
+    "href": "https://docs.wickra.org/FAQ#do-all-the-language-bindings-compute-the-same-values",
+    "file": "https://raw.githubusercontent.com/wickra-lib/.github/main/profile/badges/wickra-backtest/verified.svg",
+    "width": 134,
+    "height": 20
+  }
+]
