@@ -9,7 +9,7 @@
 
 # Wickra Backtest — Live
 
-The site behind **[backtest.wickra.org](https://backtest.wickra.org)**: an
+The site behind **[backtest-live.wickra.org](https://backtest-live.wickra.org)**: an
 in-browser backtesting demo, explanations and docs for the
 [wickra-backtest](https://github.com/wickra-lib/wickra-backtest) engine.
 
@@ -43,7 +43,7 @@ replaced with the package dependency.
 
 Vite + Vue 3 + [lightweight-charts](https://github.com/tradingview/lightweight-charts),
 mirroring [wickra-live](https://github.com/wickra-lib/wickra-live) (live.wickra.org).
-Deployed as a static site (e.g. Cloudflare Pages) on `backtest.wickra.org`.
+Deployed as a static site (e.g. Cloudflare Pages) on `backtest-live.wickra.org`.
 
 ## License
 

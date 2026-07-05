@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "backtest.wickra.org — in-browser backtesting demo + docs for the wickra-backtest engine, powered by wickra-backtest-wasm.",
+  "description": "backtest-live.wickra.org — in-browser backtesting demo + docs for the wickra-backtest engine, powered by wickra-backtest-wasm.",
   "license": "MIT OR Apache-2.0",
   "scripts": {
     "dev": "vite",
