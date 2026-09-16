@@ -1,0 +1,43 @@
+version: 2
+updates:
+  # The site's own npm dependencies: Vite, Vue and the TypeScript toolchain, the
+  # two Vite plugins the WASM demo needs, lightweight-charts.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: monthly
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps(npm)"
+    # lightweight-charts 5 removed the per-type series constructors the demo
+    # calls (`addCandlestickSeries`, `addLineSeries`); every site in the family
+    # draws with the 4.x API. The migration to `addSeries(CandlestickSeries,
+    # ...)` is one change across all of them, made on purpose, not a bump that
+    # lands here on its own. Minor and patch releases of 4.x still arrive.
+    ignore:
+      - dependency-name: "lightweight-charts"
+        update-types: ["version-update:semver-major"]
+    groups:
+      site:
+        patterns: ["*"]
+
+  # The 1 workflow here (ci) pin their actions by full SHA, which only something
+  # watching them will ever move.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      github-actions:
+        patterns: ["*"]
