@@ -1,13 +1,32 @@
-// Loads and instantiates the wickra-backtest WebAssembly module once, then
-// exposes the engine entry points. The web-target build needs init() called
-// before any export is used; ensureWasm() makes that idempotent.
-import init, { run_json, version } from '../wasm/wickra_backtest_wasm.js'
+// Loads the published wickra-backtest-wasm bundle once, then exposes the engine
+// entry points. The package is the bundler-target build, so Vite's wasm plugin
+// instantiates the module on import; ensureWasm() makes that single, lazy load
+// idempotent and surfaces a load failure before any export is used.
+type Engine = typeof import('wickra-backtest-wasm')
 
-let ready: Promise<void> | null = null
+let ready: Promise<Engine> | null = null
+let engine: Engine | null = null
 
-export function ensureWasm(): Promise<void> {
-  if (!ready) ready = init().then(() => undefined)
+export function ensureWasm(): Promise<Engine> {
+  if (!ready) {
+    ready = import('wickra-backtest-wasm').then((mod) => {
+      if (!mod.version()) throw new Error('wickra-backtest-wasm loaded but reported an empty version')
+      engine = mod
+      return mod
+    })
+  }
   return ready
 }
 
-export { run_json, version }
+function loaded(): Engine {
+  if (!engine) throw new Error('wickra-backtest-wasm is not loaded yet; await ensureWasm() first')
+  return engine
+}
+
+export function run_json(request: string): string {
+  return loaded().run_json(request)
+}
+
+export function version(): string {
+  return loaded().version()
+}
