@@ -3,6 +3,7 @@ import { ref, shallowRef, onMounted, nextTick } from 'vue'
 import {
   createChart, CrosshairMode,
   type IChartApi, type ISeriesApi, type UTCTimestamp,
+  type SeriesMarker,
 } from 'lightweight-charts'
 import { ensureWasm, run_json, version } from './lib/wasm'
 import { PRESETS } from './lib/presets'
@@ -17,7 +18,10 @@ const capital = ref(10000)
 const running = ref(false)
 const error = ref('')
 const ver = ref('')
-const report = shallowRef<any>(null)
+// The BacktestReport fields the page reads; the engine returns more.
+interface Trade { entry_time: number; exit_time: number; entry_price: number; exit_price: number; qty: number; pnl: number; return_pct: number; reason: string }
+interface Report { metrics: Record<string, number>; trades: Trade[]; equity: { time: number; equity: number }[] }
+const report = shallowRef<Report | null>(null)
 let candles: Candle[] = []
 
 const priceEl = ref<HTMLElement | null>(null)
@@ -89,17 +93,17 @@ function draw() {
   ensureCharts()
   if (!report.value) return
   candleSeries!.setData(candles.map((c) => ({ time: c.time as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close })))
-  const markers = report.value.trades.flatMap((t: any) => ([
+  const markers: SeriesMarker<UTCTimestamp>[] = report.value.trades.flatMap((t) => ([
     { time: t.entry_time as UTCTimestamp, position: 'belowBar', color: '#4ade80', shape: 'arrowUp', text: t.qty < 0 ? 'short' : 'long' },
     { time: t.exit_time as UTCTimestamp, position: 'aboveBar', color: '#f87171', shape: 'arrowDown', text: 'exit' },
-  ]))
-  markers.sort((a: any, b: any) => a.time - b.time)
+  ] as SeriesMarker<UTCTimestamp>[]))
+  markers.sort((a, b) => a.time - b.time)
   candleSeries!.setMarkers(markers)
   priceChart!.timeScale().fitContent()
   priceChart!.applyOptions({ width: priceEl.value!.clientWidth })
 
   let peak = -Infinity
-  const eq = report.value.equity.map((e: any) => ({ time: e.time as UTCTimestamp, value: e.equity }))
+  const eq = report.value.equity.map((e) => ({ time: e.time as UTCTimestamp, value: e.equity }))
   const dd = report.value.equity.map((e: any) => { peak = Math.max(peak, e.equity); return { time: e.time as UTCTimestamp, value: e.equity - peak } })
   equitySeries!.setData(eq)
   ddSeries!.setData(dd)
