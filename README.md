@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://wickra.org"><img src="https://raw.githubusercontent.com/wickra-lib/.github/main/profile/wickra-banner.webp?v=514" alt="Wickra" width="100%"></a>
+  <a href="https://wickra.org"><img src="https://raw.githubusercontent.com/wickra-lib/.github/main/profile/wickra-banner.webp?v=514-7" alt="Wickra" width="100%"></a>
 </p>
 
 [![Built on Wickra](https://img.shields.io/badge/built%20on-wickra-3b82f6)](https://github.com/wickra-lib/wickra)
@@ -27,17 +27,13 @@ npm run dev      # http://localhost:5173
 npm run build    # -> dist/
 ```
 
-The WebAssembly engine is vendored under [`src/wasm/`](src/wasm/), built from the
-`wickra-backtest` repo with:
-
-```bash
-# in wickra-lib/wickra-backtest
-wasm-pack build bindings/wasm --target web --release --out-dir pkg-web
-# then copy pkg-web -> this repo's src/wasm/
-```
-
-When `wickra-backtest-wasm` is published to npm, the vendored copy can be
-replaced with the package dependency.
+The WebAssembly engine is the published
+[`wickra-backtest-wasm`](https://www.npmjs.com/package/wickra-backtest-wasm)
+package — the `bindings/wasm` crate of
+[wickra-backtest](https://github.com/wickra-lib/wickra-backtest), built and
+published by its release pipeline — so `npm install` is all there is to it. The
+version the demo runs is the one in `package.json`; the footer of the page shows
+what the loaded engine reports.
 
 ## Stack
 
