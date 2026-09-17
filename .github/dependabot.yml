@@ -1,7 +1,7 @@
 version: 2
 updates:
   # The site's own npm dependencies: Vite, Vue and the TypeScript toolchain, the
-  # two Vite plugins the WASM demo needs, lightweight-charts.
+  # Vite plugin the WASM demo needs, lightweight-charts.
   - package-ecosystem: npm
     directory: "/"
     schedule:
@@ -20,6 +20,10 @@ updates:
     # lands here on its own. Minor and patch releases of 4.x still arrive.
     ignore:
       - dependency-name: "lightweight-charts"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 no longer exports `typescript/lib/tsc`, which vue-tsc
+      # loads; until vue-tsc supports 7 the type-check would break on the bump.
+      - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
     groups:
       site:
