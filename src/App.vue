@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { ref, shallowRef, onMounted, nextTick } from 'vue'
-import {
-  createChart, CrosshairMode,
-  type IChartApi, type ISeriesApi, type UTCTimestamp,
-  type SeriesMarker,
-} from 'lightweight-charts'
+import { AreaSeries, CandlestickSeries, CrosshairMode, createChart, createSeriesMarkers, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type SeriesMarker, type Time, type UTCTimestamp } from 'lightweight-charts'
 import { ensureWasm, run_json, version } from './lib/wasm'
 import { PRESETS } from './lib/presets'
 import { makeCandles, REGIMES, type Regime, type Candle } from './lib/data'
@@ -31,6 +27,9 @@ let equityChart: IChartApi | null = null
 let candleSeries: ISeriesApi<'Candlestick'> | null = null
 let equitySeries: ISeriesApi<'Area'> | null = null
 let ddSeries: ISeriesApi<'Area'> | null = null
+// v5 attaches markers as a primitive on the series; the handle is created
+// with the candlestick series and replaced when that series is.
+let candleMarkers: ISeriesMarkersPluginApi<Time> | null = null
 
 function loadPreset(id: string) {
   const p = PRESETS.find((x) => x.id === id)!
@@ -75,15 +74,16 @@ function ensureCharts() {
   } as const
   if (!priceChart && priceEl.value) {
     priceChart = createChart(priceEl.value, { height: 300, ...common })
-    candleSeries = priceChart.addCandlestickSeries({
+    candleSeries = priceChart.addSeries(CandlestickSeries, {
       upColor: '#4ade80', downColor: '#f87171', borderVisible: false, wickUpColor: '#4ade80', wickDownColor: '#f87171',
     })
     new ResizeObserver(() => priceChart && priceEl.value && priceChart.applyOptions({ width: priceEl.value.clientWidth })).observe(priceEl.value)
   }
   if (!equityChart && equityEl.value) {
     equityChart = createChart(equityEl.value, { height: 210, ...common })
-    equitySeries = equityChart.addAreaSeries({ lineColor: '#f8cf63', topColor: 'rgba(248,207,99,0.26)', bottomColor: 'rgba(248,207,99,0)', lineWidth: 2, priceScaleId: 'right' })
-    ddSeries = equityChart.addAreaSeries({ lineColor: 'rgba(248,113,113,0.9)', topColor: 'rgba(248,113,113,0)', bottomColor: 'rgba(248,113,113,0.30)', lineWidth: 1, priceScaleId: 'dd' })
+    equitySeries = equityChart.addSeries(AreaSeries, { lineColor: '#f8cf63', topColor: 'rgba(248,207,99,0.26)', bottomColor: 'rgba(248,207,99,0)', lineWidth: 2, priceScaleId: 'right' })
+    ddSeries = equityChart.addSeries(AreaSeries, { lineColor: 'rgba(248,113,113,0.9)', topColor: 'rgba(248,113,113,0)', bottomColor: 'rgba(248,113,113,0.30)', lineWidth: 1, priceScaleId: 'dd' })
+    candleMarkers = createSeriesMarkers(candleSeries!, [])
     equityChart.priceScale('dd').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 }, visible: false })
     new ResizeObserver(() => equityChart && equityEl.value && equityChart.applyOptions({ width: equityEl.value.clientWidth })).observe(equityEl.value)
   }
@@ -98,7 +98,7 @@ function draw() {
     { time: t.exit_time as UTCTimestamp, position: 'aboveBar', color: '#f87171', shape: 'arrowDown', text: 'exit' },
   ] as SeriesMarker<UTCTimestamp>[]))
   markers.sort((a, b) => a.time - b.time)
-  candleSeries!.setMarkers(markers)
+  candleMarkers?.setMarkers(markers)
   priceChart!.timeScale().fitContent()
   priceChart!.applyOptions({ width: priceEl.value!.clientWidth })
 
