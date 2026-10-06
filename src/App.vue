@@ -206,7 +206,7 @@ onMounted(runBacktest)
           <div class="metric"><div class="k">Sortino</div><div class="v">{{ num(report.metrics.sortino) }}</div></div>
           <div class="metric"><div class="k">Calmar</div><div class="v">{{ num(report.metrics.calmar) }}</div></div>
           <div class="metric"><div class="k">Max drawdown</div><div class="v neg">{{ num(report.metrics.max_drawdown) }}%</div></div>
-          <div class="metric"><div class="k">Win rate</div><div class="v">{{ num(report.metrics.win_rate*100) }}%</div></div>
+          <div class="metric"><div class="k">Win rate</div><div class="v">{{ num(report.metrics.win_rate) }}%</div></div>
           <div class="metric"><div class="k">Profit factor</div><div class="v">{{ num(report.metrics.profit_factor) }}</div></div>
         </div>
         <div v-else class="muted">Run the backtest to see the report.</div>
